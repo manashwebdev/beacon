@@ -9,6 +9,7 @@ import publicRoutes from "./routes/public";
 import posts from "./routes/posts";
 import github from "./routes/github";
 import profile from "./routes/profile";
+import lookup from "./routes/lookup";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/api/p", publicRoutes);
 app.use("/api/posts", posts);
 app.use("/api/github", github);
 app.use("/api/u", profile);
+app.use("/api/lookup", lookup);
 
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));
 

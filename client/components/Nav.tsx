@@ -23,12 +23,14 @@ export default function Nav() {
         {user ? (
           <>
             <Link className="btn ghost" href="/dashboard">Dashboard</Link>
-            <Link className="btn ghost" href="/dashboard/github">GitHub</Link>
+            <Link className="btn ghost" href="/github">Explore</Link>
+            <Link className="btn ghost" href="/dashboard/github">My GitHub</Link>
             <Link className="btn ghost" href="/account">{user.name.split(" ")[0]}</Link>
             <button className="btn ghost" onClick={logout}>Log out</button>
           </>
         ) : user === null ? (
           <>
+            <Link className="btn ghost" href="/github">Explore</Link>
             <Link className="btn ghost" href="/login">Log in</Link>
             <Link className="btn" href="/signup">Start free</Link>
           </>

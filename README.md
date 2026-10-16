@@ -45,6 +45,7 @@ Beacon gives each project one public page for ideas, ranks them by votes, and pu
 - **Roadmap** with four statuses: Under review, Planned, In progress, Shipped. Reply to the people who asked.
 - **Automatic changelog** at `/p/your-project/changelog`. Marking an idea Shipped adds it with a date.
 - **Website link**. Add your project's address and every public board and changelog gets a "Visit" button, so people can go straight to it.
+- **Explore any GitHub profile**. Anyone can open `/github`, type a GitHub username and see that person's public repositories. No account is needed. The site uses one token that you set on the server.
 - **GitHub section**. Connect your GitHub username with a read-only token, load all your repositories, and switch any of them on for your public page at `/u/your-username`. You can also start a feedback board from a repo in one click.
 - **Embeddable widget**. One script tag adds a floating Feedback button to any website.
 - **Analytics**: total ideas, total votes, new ideas over the last 14 days and your top requests.
@@ -181,6 +182,16 @@ Paste this before the closing `</body>` tag. Use the address of your deployed **
 
 An optional `data-color="#7cf5d4"` attribute changes the button's accent color. The widget opens your board in a panel inside the page.
 
+### Look up any GitHub profile
+
+1. Open **Explore** in the top bar, or go to `/github`.
+2. Type a GitHub username. You can also paste a `github.com/username` link.
+3. Beacon shows their public repositories with stars, language, topics and links to the code and live site. You can search, sort and hide forks.
+
+Results are shareable at `/github/username`. This only ever shows public repositories.
+
+For this to work well, set `GITHUB_TOKEN` on the server (see [Configuration](#configuration)). Without it, GitHub allows only 60 lookups per hour for the whole server. With it, the limit is 5,000 per hour, and results are also cached for 10 minutes.
+
 ### Show your GitHub projects
 
 1. Open **GitHub** in the top bar and enter your GitHub username and a read-only token. Create the token at <https://github.com/settings/personal-access-tokens/new>: choose **All repositories** and leave **Metadata** on **Read-only**. A classic token also works (tick `repo` to include private repositories).
@@ -229,6 +240,7 @@ A project can have up to 20 team members and each account can own up to 20 proje
 | --- | --- | --- |
 | `MONGODB_URI` | Yes | MongoDB connection string |
 | `JWT_SECRET` | Yes in production | Secret used to sign session tokens. The server refuses to start in production without it |
+| `GITHUB_TOKEN` | Recommended | One GitHub token for the whole site, used for the public lookup at `/github`. It only needs to read public data (a fine-grained token with **Public repositories** access and no extra permissions). Without it, lookups are limited to 60 per hour |
 | `ENCRYPTION_KEY` | No | Key used to encrypt saved GitHub tokens. Falls back to `JWT_SECRET`. If it changes, people must reconnect GitHub |
 | `PORT` | No | Port to listen on. Defaults to 4000 |
 | `CLIENT_URL` | No | Comma-separated origins allowed to call the API directly from a browser (CORS). Not needed with the default proxy setup |
@@ -252,10 +264,11 @@ beacon/
 │   │   ├── account/               Account settings (login required)
 │   │   ├── dashboard/             Projects and project management (login required)
 │   │   │   └── github/            GitHub connection and repo list (login required)
+│   │   ├── github/[username]/     Public lookup: any GitHub user's public repos
 │   │   ├── u/[login]/             Public developer page with the repos you chose
 │   │   ├── p/[slug]/              Public board and changelog
 │   │   └── embed/[slug]/          Board shown inside the widget
-│   ├── components/                Board, Manage, GitHubPanel, Nav, AuthForm, HeroCTA, MockBoard, Aurora
+│   ├── components/                Board, Manage, Lookup, GitHubPanel, Nav, AuthForm, HeroCTA, MockBoard, Aurora
 │   ├── lib/
 │   │   ├── client.ts              Fetch helper and polling hook (browser)
 │   │   ├── url.ts                 Link helpers shared by server and browser code
@@ -268,7 +281,7 @@ beacon/
 │       ├── index.ts               Starts the server and connects to MongoDB
 │       ├── app.ts                 Express app: security headers, routes, error handling
 │       ├── models.ts              User, Project, Repo, Post, Comment
-│       ├── routes/                auth, account, projects (and team), public, posts, github, profile
+│       ├── routes/                auth, account, projects (and team), public, posts, github, profile, lookup
 │       ├── middleware/auth.ts     requireAuth and optionalAuth
 │       └── lib/                   auth, access (roles), guard, rate, validators, util, http, github, crypto
 ├── docs/
@@ -319,6 +332,7 @@ The server exposes these routes under `/api`. Through the client's proxy they ar
 | `PATCH /api/github/repos/:id` | Signed in | Show or hide one repository on your public page |
 | `POST /api/github/repos/bulk` | Signed in | Show or hide all public repositories at once |
 | `POST /api/github/repos/:id/board` | Signed in | Create a feedback board from a repository |
+| `GET /api/lookup/:username` | Public | Public profile and repositories of any GitHub user (cached, rate limited) |
 | `GET /api/u/:login` | Public | A developer's public page data |
 | `GET /api/p/:slug` | Public | Board data |
 | `POST /api/p/:slug/posts` | Public | Submit an idea |
@@ -370,6 +384,7 @@ What Beacon does:
 - The signing secret exists only on the server. The client never sees it.
 - Sessions can be revoked: changing your password or choosing "Sign out of other devices" signs out every other device.
 - Login attempts are limited to 20 per minute per IP. An account locks for 15 minutes after 8 wrong passwords.
+- The site's `GITHUB_TOKEN` stays on the server. It is never sent to a browser, and the lookup only calls GitHub's public endpoints. Lookups are limited to 30 per minute per IP.
 - GitHub tokens are encrypted with AES-256-GCM before they are saved, are never returned by the API, and are deleted when you disconnect or delete your account.
 - Website links are limited to http and https addresses.
 - Permissions are checked on the server for every request, never only in the interface.
