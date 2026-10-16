@@ -3,6 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { api, usePoll } from "@/lib/client";
+import { hostOf, safeUrl } from "@/lib/url";
 
 export const STATUS: Record<string, string> = { open: "Under review", planned: "Planned", progress: "In progress", shipped: "Shipped" };
 
@@ -64,13 +65,17 @@ export default function Board({ slug, embed }: { slug: string; embed?: boolean }
   if (error) return <p className="glass" style={{ padding: 24 }}>{error}</p>;
   if (!data) return <div style={{ display: "grid", gap: 12 }}><div className="skeleton" /><div className="skeleton" /><div className="skeleton" /></div>;
   const posts = data.posts.filter((p: any) => filter === "all" || p.status === filter);
+  const site = safeUrl(data.project.website);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div>
         <h1 className="h1 glowtext" style={embed ? { fontSize: 26 } : undefined}>{data.project.name}</h1>
         {data.project.description && <p className="muted" style={{ margin: "8px 0 0" }}>{data.project.description}</p>}
-        {!embed && <Link href={`/p/${slug}/changelog`} className="btn ghost" style={{ marginTop: 14 }}>See what shipped</Link>}
+        <div className="flex gap-2 flex-wrap" style={{ marginTop: 14 }}>
+          {site && <a className="btn" href={site} target="_blank" rel="noopener noreferrer nofollow">Visit {hostOf(site)} ↗</a>}
+          {!embed && <Link href={`/p/${slug}/changelog`} className="btn ghost">See what shipped</Link>}
+        </div>
       </div>
 
       <form onSubmit={submit} className="glass" style={{ padding: 16, display: "grid", gap: 10 }}>

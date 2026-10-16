@@ -4,11 +4,13 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import Nav from "@/components/Nav";
 import { api, usePoll } from "@/lib/client";
+import { hostOf, safeUrl } from "@/lib/url";
 
 export default function Dashboard() {
   const { data, error, reload } = usePoll(() => api("/api/projects"));
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [site, setSite] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -17,8 +19,8 @@ export default function Dashboard() {
     setBusy(true);
     setErr("");
     try {
-      await api("/api/projects", { method: "POST", body: { name, description: desc } });
-      setName(""); setDesc("");
+      await api("/api/projects", { method: "POST", body: { name, description: desc, website: site } });
+      setName(""); setDesc(""); setSite("");
       reload();
     } catch (x: any) { setErr(x.message); }
     setBusy(false);
@@ -34,6 +36,7 @@ export default function Dashboard() {
           <div className="flex gap-2 flex-wrap">
             <input className="in" style={{ flex: 1, minWidth: 180 }} placeholder="Project name" value={name} onChange={(e) => setName(e.target.value)} required />
             <input className="in" style={{ flex: 2, minWidth: 200 }} placeholder="Short description (optional)" value={desc} onChange={(e) => setDesc(e.target.value)} />
+            <input className="in" style={{ flex: 2, minWidth: 200 }} placeholder="Website link, e.g. myapp.com (optional)" value={site} onChange={(e) => setSite(e.target.value)} inputMode="url" autoCapitalize="none" />
             <button className="btn" disabled={busy}>{busy ? "Creating..." : "Create project"}</button>
           </div>
           {err && <p className="err" role="alert">{err}</p>}
@@ -46,7 +49,7 @@ export default function Dashboard() {
               <Link href={`/dashboard/${p.id}`} className="glass lift" style={{ display: "block", padding: 20 }}>
                 <div className="flex items-center justify-between gap-2"><b style={{ fontSize: 19 }}>{p.name}</b><span className={"chip " + (p.role === "owner" ? "owner" : "")}>{p.role === "owner" ? "Owner" : p.role === "admin" ? "Admin" : p.role === "editor" ? "Editor" : "Viewer"}</span></div>
                 <p className="muted" style={{ margin: "6px 0 14px", fontSize: 14 }}>{p.description || "No description"}</p>
-                <span className="chip">{p.posts} {p.posts === 1 ? "idea" : "ideas"}</span> <span className="muted" style={{ fontSize: 13 }}>/p/{p.slug}</span>
+                <span className="chip">{p.posts} {p.posts === 1 ? "idea" : "ideas"}</span> <span className="muted" style={{ fontSize: 13 }}>/p/{p.slug}</span>{safeUrl(p.website) && <span className="muted" style={{ fontSize: 13 }}> · {hostOf(p.website)}</span>}
               </Link>
             </motion.div>
           ))}

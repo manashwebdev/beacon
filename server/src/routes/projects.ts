@@ -5,7 +5,8 @@ import { requireAuth } from "../middleware/auth";
 import { projectAccess } from "../lib/guard";
 import { atLeast, roleOf } from "../lib/access";
 import { wrap, fail, parse } from "../lib/http";
-import { slugify, pub } from "../lib/util";
+import { pub, uniqueSlug } from "../lib/util";
+import { websiteRule } from "../lib/validators";
 
 const r = Router();
 r.use(requireAuth);
@@ -16,24 +17,26 @@ r.get("/", wrap(async (req, res) => {
   const list: any[] = await ProjectM.find({ $or: [{ owner: u._id }, { "members.user": u._id }] }).sort({ createdAt: -1 }).lean();
   const projects = await Promise.all(
     list.map(async (p) => ({
-      id: String(p._id), name: p.name, slug: p.slug, description: p.description || "",
+      id: String(p._id), name: p.name, slug: p.slug, description: p.description || "", website: p.website || "",
       role: roleOf(p, u._id), posts: await PostM.countDocuments({ project: p._id }),
     }))
   );
   res.json({ projects });
 }));
 
-const Create = z.object({ name: z.string().trim().min(2, "Name needs at least 2 characters").max(50), description: z.string().trim().max(200).optional() });
+const Create = z.object({
+  name: z.string().trim().min(2, "Name needs at least 2 characters").max(50),
+  description: z.string().trim().max(200).optional(),
+  website: websiteRule.optional(),
+});
 
 r.post("/", wrap(async (req, res) => {
   const u = req.user;
   const b = parse(Create, req.body);
   if (b.error) return fail(res, 400, b.error);
   if ((await ProjectM.countDocuments({ owner: u._id })) >= 20) return fail(res, 403, "Project limit reached (20).");
-  const base = slugify(b.data.name);
-  let slug = base, i = 1;
-  while (await ProjectM.exists({ slug })) slug = `${base}-${++i}`;
-  const p = await ProjectM.create({ owner: u._id, name: b.data.name, slug, description: b.data.description || "" });
+  const slug = await uniqueSlug(b.data.name);
+  const p = await ProjectM.create({ owner: u._id, name: b.data.name, slug, description: b.data.description || "", website: b.data.website || "" });
   res.status(201).json({ id: String(p._id), slug });
 }));
 
@@ -57,7 +60,21 @@ r.get("/:id", wrap(async (req, res) => {
     if (d) d.count++;
   });
   const stats = { total: posts.length, votes: posts.reduce((n, x) => n + x.votes, 0), byStatus, perDay: days, top: posts.slice(0, 5) };
-  res.json({ role: a.role, project: { id: String(p._id), name: p.name, slug: p.slug, description: p.description || "" }, posts, stats });
+  res.json({ role: a.role, project: { id: String(p._id), name: p.name, slug: p.slug, description: p.description || "", website: p.website || "" }, posts, stats });
+}));
+
+// Admins and the owner can edit the name, description and website link. The public address (slug) stays the same.
+r.patch("/:id", wrap(async (req, res) => {
+  const a = await projectAccess(req.user, req.params.id, "admin");
+  if (!a) return fail(res, 403, "Only admins can edit project details");
+  const b = parse(z.object({
+    name: z.string().trim().min(2, "Name needs at least 2 characters").max(50).optional(),
+    description: z.string().trim().max(200).optional(),
+    website: websiteRule.optional(),
+  }), req.body);
+  if (b.error) return fail(res, 400, b.error);
+  await ProjectM.updateOne({ _id: a.project._id }, { $set: b.data });
+  res.json({ ok: true, ...b.data }); // website comes back cleaned (https:// added), so the form can show what was saved
 }));
 
 // Only the owner can delete a project.

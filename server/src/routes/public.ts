@@ -16,7 +16,7 @@ r.get("/:slug", wrap(async (req, res) => {
   const posts = raw
     .map((x) => pub(x, vid))
     .sort((a, b) => b.votes - a.votes || +new Date(b.createdAt) - +new Date(a.createdAt));
-  res.json({ project: { name: p.name, description: p.description || "", slug: p.slug }, posts });
+  res.json({ project: { name: p.name, description: p.description || "", slug: p.slug, website: p.website || "" }, posts });
 }));
 
 const NewPost = z.object({
@@ -42,7 +42,7 @@ r.get("/:slug/changelog", wrap(async (req, res) => {
   const p: any = await ProjectM.findOne({ slug: req.params.slug }).lean();
   if (!p) return fail(res, 404, "Project not found");
   const items: any[] = await PostM.find({ project: p._id, status: "shipped" }).sort({ shippedAt: -1 }).lean();
-  res.json({ project: { name: p.name, slug: p.slug }, items: items.map((x) => pub(x)) });
+  res.json({ project: { name: p.name, slug: p.slug, website: p.website || "" }, items: items.map((x) => pub(x)) });
 }));
 
 export default r;

@@ -23,6 +23,7 @@ export default function Nav() {
         {user ? (
           <>
             <Link className="btn ghost" href="/dashboard">Dashboard</Link>
+            <Link className="btn ghost" href="/dashboard/github">GitHub</Link>
             <Link className="btn ghost" href="/account">{user.name.split(" ")[0]}</Link>
             <button className="btn ghost" onClick={logout}>Log out</button>
           </>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Nav from "@/components/Nav";
 import { serverFetch } from "@/lib/server";
+import { hostOf, safeUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,15 @@ export default async function Page({ params }: { params: { slug: string } }) {
   if (r.status === 404) notFound();
   if (!r.ok) throw new Error("Could not load the changelog");
   const { project, items } = await r.json();
+  const site = safeUrl(project.website);
   return (
     <>
       <Nav />
       <main className="wrap" style={{ maxWidth: 760 }}>
-        <Link href={`/p/${project.slug}`} className="muted" style={{ fontSize: 14 }}>← Back to the board</Link>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <Link href={`/p/${project.slug}`} className="muted" style={{ fontSize: 14 }}>← Back to the board</Link>
+          {site && <a className="btn ghost sm" href={site} target="_blank" rel="noopener noreferrer nofollow">Visit {hostOf(site)} ↗</a>}
+        </div>
         <h1 className="h1 glowtext" style={{ fontSize: "clamp(30px,5vw,48px)", margin: "8px 0 24px" }}>{project.name} changelog</h1>
         {items.length === 0 && <p className="muted glass" style={{ padding: 24 }}>Nothing has shipped yet. Check back soon.</p>}
         <div style={{ display: "grid", gap: 16 }}>

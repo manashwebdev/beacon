@@ -44,6 +44,8 @@ Beacon gives each project one public page for ideas, ranks them by votes, and pu
 - **Voting** that ranks ideas by demand. One vote per visitor per idea, toggled on and off.
 - **Roadmap** with four statuses: Under review, Planned, In progress, Shipped. Reply to the people who asked.
 - **Automatic changelog** at `/p/your-project/changelog`. Marking an idea Shipped adds it with a date.
+- **Website link**. Add your project's address and every public board and changelog gets a "Visit" button, so people can go straight to it.
+- **GitHub section**. Connect your GitHub username with a read-only token, load all your repositories, and switch any of them on for your public page at `/u/your-username`. You can also start a feedback board from a repo in one click.
 - **Embeddable widget**. One script tag adds a floating Feedback button to any website.
 - **Analytics**: total ideas, total votes, new ideas over the last 14 days and your top requests.
 - **Accounts**: signup, login, password change, sign out of other devices, account deletion.
@@ -156,11 +158,12 @@ For a production build, run `npm run build` and then `npm start` inside each fol
 
 1. Click **Start free** and create an account.
 2. On the dashboard, create a project, for example "ResumeDiff". Beacon gives it a public link such as `/p/resumediff`.
-3. Open the project and go to **Share and embed**. Copy the public link or the widget snippet.
-4. Share the link with your users, or paste the snippet into your site.
-5. As ideas arrive, open the **Roadmap** tab. Change an idea's status from its dropdown and write a reply for your users.
-6. Set an idea to **Shipped** when you release it. It appears on your public changelog automatically.
-7. Use the **Analytics** tab to see activity and your most requested ideas.
+3. Add your project's website link when you create it, or later under the **Settings** tab. A **Visit** button then appears on the public board and changelog.
+4. Open the project and go to **Share and embed**. Copy the public link or the widget snippet.
+5. Share the link with your users, or paste the snippet into your site.
+6. As ideas arrive, open the **Roadmap** tab. Change an idea's status from its dropdown and write a reply for your users.
+7. Set an idea to **Shipped** when you release it. It appears on your public changelog automatically.
+8. Use the **Analytics** tab to see activity and your most requested ideas.
 
 ### As a visitor
 
@@ -177,6 +180,15 @@ Paste this before the closing `</body>` tag. Use the address of your deployed **
 ```
 
 An optional `data-color="#7cf5d4"` attribute changes the button's accent color. The widget opens your board in a panel inside the page.
+
+### Show your GitHub projects
+
+1. Open **GitHub** in the top bar and enter your GitHub username and a read-only token. Create the token at <https://github.com/settings/personal-access-tokens/new>: choose **All repositories** and leave **Metadata** on **Read-only**. A classic token also works (tick `repo` to include private repositories).
+2. Beacon loads every repository you own. Use **Sync from GitHub** any time to refresh the list.
+3. Switch on the repositories you want people to see. **Show all public** switches on every public repository at once. Private repositories are only shown if you switch them on one by one.
+4. Share your page at `/u/your-username`. Each card shows the description, language and stars, with links to the code, the live site and a feedback board when there is one.
+
+The token must belong to the username you enter. It is encrypted before it is stored, it is never sent back to the browser, and **Disconnect** deletes it. Showing a repository only changes what Beacon displays. It never changes the repository on GitHub.
 
 ### Add teammates
 
@@ -217,6 +229,7 @@ A project can have up to 20 team members and each account can own up to 20 proje
 | --- | --- | --- |
 | `MONGODB_URI` | Yes | MongoDB connection string |
 | `JWT_SECRET` | Yes in production | Secret used to sign session tokens. The server refuses to start in production without it |
+| `ENCRYPTION_KEY` | No | Key used to encrypt saved GitHub tokens. Falls back to `JWT_SECRET`. If it changes, people must reconnect GitHub |
 | `PORT` | No | Port to listen on. Defaults to 4000 |
 | `CLIENT_URL` | No | Comma-separated origins allowed to call the API directly from a browser (CORS). Not needed with the default proxy setup |
 
@@ -238,11 +251,14 @@ beacon/
 │   │   ├── login/, signup/        Auth pages
 │   │   ├── account/               Account settings (login required)
 │   │   ├── dashboard/             Projects and project management (login required)
+│   │   │   └── github/            GitHub connection and repo list (login required)
+│   │   ├── u/[login]/             Public developer page with the repos you chose
 │   │   ├── p/[slug]/              Public board and changelog
 │   │   └── embed/[slug]/          Board shown inside the widget
-│   ├── components/                Board, Manage, Nav, AuthForm, HeroCTA, MockBoard, Aurora
+│   ├── components/                Board, Manage, GitHubPanel, Nav, AuthForm, HeroCTA, MockBoard, Aurora
 │   ├── lib/
 │   │   ├── client.ts              Fetch helper and polling hook (browser)
+│   │   ├── url.ts                 Link helpers shared by server and browser code
 │   │   └── server.ts              Calls the API from Server Components
 │   ├── public/widget.js           Embeddable feedback widget
 │   ├── middleware.ts              Redirects visitors with no session cookie
@@ -251,10 +267,10 @@ beacon/
 │   └── src/
 │       ├── index.ts               Starts the server and connects to MongoDB
 │       ├── app.ts                 Express app: security headers, routes, error handling
-│       ├── models.ts              User, Project, Post, Comment
-│       ├── routes/                auth, account, projects (and team), public, posts
+│       ├── models.ts              User, Project, Repo, Post, Comment
+│       ├── routes/                auth, account, projects (and team), public, posts, github, profile
 │       ├── middleware/auth.ts     requireAuth and optionalAuth
-│       └── lib/                   auth, access (roles), guard, rate, validators, util, http
+│       └── lib/                   auth, access (roles), guard, rate, validators, util, http, github, crypto
 ├── docs/
 │   ├── screenshots/               Images used in this README
 │   └── demo/index.html            Standalone demo of the interface
@@ -268,6 +284,7 @@ beacon/
 - **Anonymous voting.** The browser creates a random id, keeps it in localStorage and sends it as the `x-voter` header. The server records one vote per id per idea using `$addToSet` and `$pull`.
 - **Live updates.** The public board refreshes every 6 seconds and the dashboard every 8 seconds while the tab is visible.
 - **Changelog.** Setting an idea's status to Shipped stores a `shippedAt` date. The changelog page is rendered on the client's server from the API's shipped ideas.
+- **GitHub.** `POST /api/github/connect` checks the token against `GET /user` on GitHub and refuses it if the account does not match the username you typed. Repositories are copied into a `Repo` collection by `GET /user/repos`. Each repo keeps its own public or hidden choice across syncs.
 - **Widget.** `client/public/widget.js` adds a button and an iframe that loads `/embed/[slug]`.
 - **Analytics.** Totals, a 14-day series and the top requests are computed in `GET /api/projects/:id`.
 
@@ -289,11 +306,20 @@ The server exposes these routes under `/api`. Through the client's proxy they ar
 | `GET /api/projects` | Signed in | Projects you own or belong to, with your role |
 | `POST /api/projects` | Signed in | Create a project |
 | `GET /api/projects/:id` | Viewer and up | Dashboard data and analytics |
+| `PATCH /api/projects/:id` | Admin and up | Edit name, description and website link |
 | `DELETE /api/projects/:id` | Owner | Delete a project |
 | `GET /api/projects/:id/members` | Viewer and up | List the team |
 | `POST /api/projects/:id/members` | Admin and up | Add a person by account email |
 | `PATCH /api/projects/:id/members` | Admin and up | Change a person's role |
 | `DELETE /api/projects/:id/members/:userId` | Admin and up, or yourself | Remove a person, or leave |
+| `GET /api/github` | Signed in | Your GitHub connection and repository list (never the token) |
+| `POST /api/github/connect` | Signed in | Connect GitHub with a username and token |
+| `POST /api/github/sync` | Signed in | Reload your repositories from GitHub |
+| `DELETE /api/github` | Signed in | Disconnect and delete the saved token |
+| `PATCH /api/github/repos/:id` | Signed in | Show or hide one repository on your public page |
+| `POST /api/github/repos/bulk` | Signed in | Show or hide all public repositories at once |
+| `POST /api/github/repos/:id/board` | Signed in | Create a feedback board from a repository |
+| `GET /api/u/:login` | Public | A developer's public page data |
 | `GET /api/p/:slug` | Public | Board data |
 | `POST /api/p/:slug/posts` | Public | Submit an idea |
 | `GET /api/p/:slug/changelog` | Public | Shipped ideas |
@@ -344,6 +370,8 @@ What Beacon does:
 - The signing secret exists only on the server. The client never sees it.
 - Sessions can be revoked: changing your password or choosing "Sign out of other devices" signs out every other device.
 - Login attempts are limited to 20 per minute per IP. An account locks for 15 minutes after 8 wrong passwords.
+- GitHub tokens are encrypted with AES-256-GCM before they are saved, are never returned by the API, and are deleted when you disconnect or delete your account.
+- Website links are limited to http and https addresses.
 - Permissions are checked on the server for every request, never only in the interface.
 - Request bodies are validated with Zod, bodies are capped at 50 KB, helmet sets security headers, and user content is escaped when displayed.
 

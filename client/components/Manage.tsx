@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { api, usePoll } from "@/lib/client";
 import { STATUS } from "./Board";
+import { hostOf, safeUrl } from "@/lib/url";
 
 const COLS = ["open", "planned", "progress", "shipped"];
 const ROLE_LABEL: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
@@ -58,6 +59,42 @@ function Team({ id }: { id: string }) {
   );
 }
 
+function Settings({ id, project, onSaved }: { id: string; project: any; onSaved: () => void }) {
+  const [name, setName] = useState(project.name);
+  const [desc, setDesc] = useState(project.description || "");
+  const [site, setSite] = useState(project.website || "");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [bad, setBad] = useState(false);
+
+  async function save(e: any) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("");
+    try {
+      const j = await api(`/api/projects/${id}`, { method: "PATCH", body: { name, description: desc, website: site } });
+      if (typeof j.website === "string") setSite(j.website);
+      setBad(false);
+      setMsg("Saved.");
+      onSaved();
+    } catch (x: any) { setBad(true); setMsg(x.message); }
+    setBusy(false);
+  }
+
+  return (
+    <form onSubmit={save} className="glass" style={{ padding: 20, display: "grid", gap: 14, maxWidth: 620 }}>
+      <div><b>Project details</b><p className="muted" style={{ margin: "4px 0 0", fontSize: 14 }}>The website link adds a "Visit" button to your public board and changelog, so people can go straight to your project.</p></div>
+      <label style={{ display: "grid", gap: 6, fontSize: 14 }}>Name<input className="in" value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={50} /></label>
+      <label style={{ display: "grid", gap: 6, fontSize: 14 }}>Description<input className="in" value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={200} placeholder="Short description (optional)" /></label>
+      <label style={{ display: "grid", gap: 6, fontSize: 14 }}>Website link<input className="in" value={site} onChange={(e) => setSite(e.target.value)} inputMode="url" autoCapitalize="none" placeholder="https://myapp.com" /></label>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button className="btn" disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>
+        {msg && <span className={bad ? "err" : "muted"} role="status" style={{ fontSize: 14 }}>{msg}</span>}
+      </div>
+    </form>
+  );
+}
+
 export default function Manage({ id }: { id: string }) {
   const router = useRouter();
   const { data, error, reload } = usePoll(() => api("/api/projects/" + id), 8000);
@@ -73,6 +110,7 @@ export default function Manage({ id }: { id: string }) {
   const origin = typeof window !== "undefined" ? location.origin : "";
   const publicUrl = `${origin}/p/${project.slug}`;
   const snippet = `<script src="${origin}/widget.js" data-project="${project.slug}" defer></script>`;
+  const site = safeUrl(project.website);
   const maxDay = Math.max(1, ...stats.perDay.map((d: any) => d.count));
 
   async function run(fn: () => Promise<any>) { setMsg(""); try { await fn(); reload(); } catch (x: any) { setMsg(x.message); } }
@@ -92,13 +130,14 @@ export default function Manage({ id }: { id: string }) {
           <h1 className="h1 glowtext" style={{ fontSize: "clamp(28px,5vw,48px)", marginTop: 6 }}>{project.name} <span className={"chip " + (role === "owner" ? "owner" : "")} style={{ fontSize: 13, verticalAlign: "middle" }}>{ROLE_LABEL[role]}</span></h1>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {site && <a className="btn" href={site} target="_blank" rel="noopener noreferrer nofollow">Visit {hostOf(site)} ↗</a>}
           <Link className="btn ghost" href={`/p/${project.slug}`} target="_blank">Public board</Link>
           <Link className="btn ghost" href={`/p/${project.slug}/changelog`} target="_blank">Changelog</Link>
         </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {[["feedback", "Roadmap"], ["analytics", "Analytics"], ["team", "Team"], ["embed", "Share and embed"]].map(([k, l]) => (
+        {[["feedback", "Roadmap"], ["analytics", "Analytics"], ["team", "Team"], ["embed", "Share and embed"], ...(canDelete ? [["settings", "Settings"]] : [])].map(([k, l]) => (
           <button key={k} className="btn ghost" style={tab === k ? { borderColor: "var(--accent)", boxShadow: "0 0 18px color-mix(in srgb, var(--accent) 40%, transparent)" } : undefined} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -161,6 +200,8 @@ export default function Manage({ id }: { id: string }) {
       )}
 
       {tab === "team" && <Team id={id} />}
+
+      {tab === "settings" && canDelete && <Settings id={id} project={project} onSaved={reload} />}
 
       {tab === "embed" && (
         <div className="glass" style={{ padding: 20, display: "grid", gap: 14 }}>

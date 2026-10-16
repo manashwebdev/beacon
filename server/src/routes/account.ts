@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { UserM, ProjectM, PostM, CommentM } from "../models";
+import { UserM, ProjectM, PostM, CommentM, RepoM } from "../models";
 import { check, hash, setSession, clearSession } from "../lib/auth";
 import { requireAuth } from "../middleware/auth";
 import { wrap, fail, parse } from "../lib/http";
@@ -31,6 +31,7 @@ r.delete("/", wrap(async (req, res) => {
   await PostM.deleteMany({ project: { $in: pids } });
   await ProjectM.deleteMany({ _id: { $in: pids } });
   await ProjectM.updateMany({ "members.user": u._id }, { $pull: { members: { user: u._id } } });
+  await RepoM.deleteMany({ owner: u._id });
   await UserM.deleteOne({ _id: u._id });
   clearSession(res);
   res.json({ ok: true });
